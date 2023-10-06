@@ -20,8 +20,3 @@ pub fn render_body(body: &str) -> String {
         body
     )
 }
-
-pub const FOOTER: &str = r#"
-
-</html>
-"#;
