@@ -6,25 +6,6 @@ mod templates;
 const CONTENT_DIR: &str = "content";
 const PUBLIC_DIR: &str = "public";
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    rebuild_site(CONTENT_DIR, PUBLIC_DIR).expect("Rebuilding site");
-
-    tokio::task::spawn_blocking(move || {
-        println!("listenning for changes: {}", CONTENT_DIR);
-        let mut hotwatch = hotwatch::Hotwatch::new().expect("hotwatch failed to initialize!");
-        hotwatch
-            .watch(CONTENT_DIR, |_| {
-                println!("Rebuilding site");
-                rebuild_site(CONTENT_DIR, PUBLIC_DIR).expect("Rebuilding site");
-            })
-            .expect("failed to watch content folder!");
-        loop {
-            thread::sleep(Duration::from_secs(1));
-        }
-    });
-}
-
 fn rebuild_site(content_dir: &str, output_dir: &str) -> Result<(), anyhow::Error> {
     let _ = fs::remove_dir_all(output_dir);
 
@@ -39,7 +20,7 @@ fn rebuild_site(content_dir: &str, output_dir: &str) -> Result<(), anyhow::Error
     for file in &markdown_files {
         let mut html = templates::HEADER.to_owned();
         let markdown = fs::read_to_string(&file)?;
-        let parser = pulldown_cmark::Parser::new_ext(&markdown,  pulldown_cmark::Options::all());
+        let parser = pulldown_cmark::Parser::new_ext(&markdown, pulldown_cmark::Options::all());
 
         let mut body = String::new();
         pulldown_cmark::html::push_html(&mut body, parser);
@@ -83,8 +64,23 @@ fn write_index(files: Vec<String>, output_dir: &str) -> Result<(), anyhow::Error
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    // ...
+    rebuild_site(CONTENT_DIR, PUBLIC_DIR).expect("Rebuilding site");
 
+    tokio::task::spawn_blocking(move || {
+        println!("listening for changes: {}", CONTENT_DIR);
+        let mut hotwatch = hotwatch::Hotwatch::new().expect("hotwatch failed to initialize!");
+        hotwatch
+            .watch(CONTENT_DIR, |_| {
+                println!("Rebuilding site");
+                rebuild_site(CONTENT_DIR, PUBLIC_DIR).expect("Rebuilding site");
+            })
+            .expect("failed to watch content folder!");
+        loop {
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+
+    // Create the Axum app and start the server
     let app = Router::new().nest(
         "/",
         service::get(ServeDir::new(PUBLIC_DIR)).handle_error(|error: std::io::Error| {
@@ -103,4 +99,3 @@ async fn main() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
-
